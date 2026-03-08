@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>2048 | CSK Games | Computer Store Kansas</title>
+  <meta name="description" content="2048 — merge the tiles, reach 2048! From Computer Store Kansas in Topeka, KS." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #05090f;
+      --bg2:      #0a1220;
+      --panel:    #0d1a2e;
+      --border:   #1a3a5c;
+      --blue:     #0366d6;
+      --cyan:     #00d4ff;
+      --green:    #10b981;
+      --orange:   #ff6b35;
+      --amber:    #f59e0b;
+      --pink:     #ec4899;
+      --purple:   #7c3aed;
+      --white:    #ffffff;
+      --gray:     #6b8caa;
+      --text:     #e2eaf4;
+
+      /* Tile colors — tech themed */
+      --t2:    #0d2a4a;
+      --t4:    #0f3460;
+      --t8:    #0366d6;
+      --t16:   #1a7fff;
+      --t32:   #00d4ff;
+      --t64:   #ff6b35;
+      --t128:  #f59e0b;
+      --t256:  #10b981;
+      --t512:  #7c3aed;
+      --t1024: #ec4899;
+      --t2048: #ffd700;
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      font-family: 'Exo 2', sans-serif;
+      color: var(--text);
+      touch-action: none;
+      user-select: none;
+    }
+
+    /* Circuit grid bg */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(3,102,214,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(3,102,214,0.06) 1px, transparent 1px);
+      background-size: 32px 32px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    #wrap {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      gap: 10px;
+      padding: 10px;
+    }
+
+    /* ── HEADER ── */
+    #hdr {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      max-width: 420px;
+      gap: 8px;
+    }
+
+    .logo {
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 900;
+      font-size: clamp(1rem, 4vw, 1.4rem);
+      color: var(--white);
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+    }
+    .logo span { color: var(--cyan); }
+
+    .score-wrap {
+      display: flex;
+      gap: 6px;
+    }
+
+    .score-box {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 10px;
+      text-align: center;
+      min-width: 60px;
+    }
+    .score-box .lbl {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.48rem;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      color: var(--gray);
+      text-transform: uppercase;
+    }
+    .score-box .val {
+      font-family: 'Orbitron', sans-serif;
+      font-size: clamp(0.85rem, 3vw, 1.1rem);
+      font-weight: 700;
+      color: var(--cyan);
+    }
+    #best-val { color: var(--green); }
+
+    /* ── HINT ── */
+    #hint {
+      font-size: 0.72rem;
+      color: var(--gray);
+      letter-spacing: 0.08em;
+      text-align: center;
+      font-family: 'Orbitron', sans-serif;
+    }
+
+    /* ── BOARD ── */
+    #board-wrap {
+      position: relative;
+      width: 100%;
+      max-width: 420px;
+    }
+
+    #board {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      width: 100%;
+      position: relative;
+      box-shadow: 0 0 40px rgba(3,102,214,0.15), inset 0 0 30px rgba(0,0,0,0.3);
+    }
+
+    /* Empty cell */
+    .cell {
+      aspect-ratio: 1;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.05);
+      position: relative;
+    }
+
+    /* ── TILES ── */
+    #tile-layer {
+      position: absolute;
+      inset: 8px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      pointer-events: none;
+    }
+
+    .tile {
+      position: absolute;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 900;
+      transition: left 0.1s ease, top 0.1s ease;
+      will-change: left, top;
+    }
+
+    .tile.new {
+      animation: tileAppear 0.15s ease-out both;
+    }
+
+    .tile.merge {
+      animation: tileMerge 0.18s ease-out both;
+    }
+
+    @keyframes tileAppear {
+      from { transform: scale(0); opacity: 0; }
+      to   { transform: scale(1); opacity: 1; }
+    }
+
+    @keyframes tileMerge {
+      0%   { transform: scale(1); }
+      50%  { transform: scale(1.2); }
+      100% { transform: scale(1); }
+    }
+
+    /* ── OVERLAYS ── */
+    .overlay {
+      position: absolute;
+      inset: 0;
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      background: rgba(5,9,15,0.88);
+      backdrop-filter: blur(4px);
+      z-index: 10;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+    .overlay.show { opacity: 1; pointer-events: all; }
+
+    .overlay-title {
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 900;
+      font-size: clamp(1.4rem, 6vw, 2.2rem);
+      text-align: center;
+      line-height: 1.2;
+    }
+
+    .overlay-sub {
+      font-size: clamp(0.75rem, 2.5vw, 0.9rem);
+      color: var(--gray);
+      text-align: center;
+      font-family: 'Orbitron', sans-serif;
+      letter-spacing: 0.05em;
+    }
+
+    .overlay-score {
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 700;
+      font-size: clamp(1rem, 4vw, 1.4rem);
+      color: var(--cyan);
+    }
+
+    .overlay-btn {
+      background: var(--blue);
+      color: var(--white);
+      border: none;
+      border-radius: 6px;
+      padding: 10px 28px;
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 700;
+      font-size: 0.85rem;
+      letter-spacing: 0.1em;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.15s;
+      box-shadow: 0 0 20px rgba(3,102,214,0.4);
+    }
+    .overlay-btn:hover { background: #1a7fff; transform: translateY(-2px); }
+
+    /* ── NEW GAME BTN ── */
+    #new-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--gray);
+      border-radius: 6px;
+      padding: 5px 12px;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.6rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+      white-space: nowrap;
+    }
+    #new-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+
+    /* ── SCORE POP ── */
+    .score-pop {
+      position: absolute;
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 700;
+      font-size: 0.9rem;
+      color: var(--cyan);
+      text-shadow: 0 0 10px var(--cyan);
+      pointer-events: none;
+      z-index: 20;
+      animation: scorePop 0.8s ease-out forwards;
+    }
+    @keyframes scorePop {
+      0%   { opacity: 1; transform: translateY(0) scale(1); }
+      100% { opacity: 0; transform: translateY(-40px) scale(0.8); }
+    }
+
+    /* ── WIN BANNER (keep playing option) ── */
+    #win-overlay .overlay-title { color: var(--amber); text-shadow: 0 0 30px rgba(245,158,11,0.6); }
+    #lose-overlay .overlay-title { color: var(--pink); text-shadow: 0 0 30px rgba(236,72,153,0.5); }
+
+    .btn-row { display: flex; gap: 8px; }
+    .overlay-btn.secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--gray);
+      box-shadow: none;
+    }
+    .overlay-btn.secondary:hover { border-color: var(--cyan); color: var(--cyan); background: transparent; }
+  </style>
+</head>
+<body>
+<div id="wrap">
+
+  <!-- HEADER -->
+  <div id="hdr">
+    <div class="logo">CSK <span>2048</span></div>
+    <div class="score-wrap">
+      <div class="score-box">
+        <div class="lbl">Score</div>
+        <div class="val" id="score-val">0</div>
+      </div>
+      <div class="score-box">
+        <div class="lbl">Best</div>
+        <div class="val" id="best-val">0</div>
+      </div>
+    </div>
+    <button id="new-btn" onclick="newGame()">NEW</button>
+  </div>
+
+  <!-- HINT -->
+  <div id="hint">SWIPE OR USE ARROW KEYS — MERGE TO 2048</div>
+
+  <!-- BOARD -->
+  <div id="board-wrap">
+    <div id="board"></div>
+    <div id="tile-layer"></div>
+
+    <!-- WIN OVERLAY -->
+    <div class="overlay" id="win-overlay">
+      <div class="overlay-title">⚡ 2048!</div>
+      <div class="overlay-sub">You reached 2048!</div>
+      <div class="overlay-score" id="win-score"></div>
+      <div class="btn-row">
+        <button class="overlay-btn" onclick="newGame()">NEW GAME</button>
+        <button class="overlay-btn secondary" onclick="keepPlaying()">KEEP GOING</button>
+      </div>
+    </div>
+
+    <!-- LOSE OVERLAY -->
+    <div class="overlay" id="lose-overlay">
+      <div class="overlay-title">GAME OVER</div>
+      <div class="overlay-sub">No moves left</div>
+      <div class="overlay-score" id="lose-score"></div>
+      <button class="overlay-btn" onclick="newGame()">TRY AGAIN</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── CONSTANTS ──────────────────────────────────────────
+const SIZE = 4;
+const TILE_COLORS = {
+  2:    { bg: '#0d2a4a', fg: '#6b8caa', glow: 'none' },
+  4:    { bg: '#0f3460', fg: '#00d4ff', glow: 'none' },
+  8:    { bg: '#0366d6', fg: '#ffffff', glow: 'rgba(3,102,214,0.6)' },
+  16:   { bg: '#1a7fff', fg: '#ffffff', glow: 'rgba(26,127,255,0.6)' },
+  32:   { bg: '#00d4ff', fg: '#05090f', glow: 'rgba(0,212,255,0.7)' },
+  64:   { bg: '#ff6b35', fg: '#ffffff', glow: 'rgba(255,107,53,0.7)' },
+  128:  { bg: '#f59e0b', fg: '#05090f', glow: 'rgba(245,158,11,0.7)' },
+  256:  { bg: '#10b981', fg: '#ffffff', glow: 'rgba(16,185,129,0.7)' },
+  512:  { bg: '#7c3aed', fg: '#ffffff', glow: 'rgba(124,58,237,0.8)' },
+  1024: { bg: '#ec4899', fg: '#ffffff', glow: 'rgba(236,72,153,0.8)' },
+  2048: { bg: '#ffd700', fg: '#05090f', glow: 'rgba(255,215,0,0.9)' },
+};
+
+const LABELS = {
+  2: '2', 4: '4', 8: '8', 16: '16', 32: '32', 64: '64',
+  128: '128', 256: '256', 512: '512', 1024: '1K', 2048: '2048'
+};
+
+// ── STATE ──────────────────────────────────────────────
+let grid = [];       // 4x4 array of values (0 = empty)
+let score = 0;
+let best  = parseInt(localStorage.getItem('csk-2048-best') || '0');
+let won   = false;
+let keepGoing = false;
+
+const scoreEl = document.getElementById('score-val');
+const bestEl  = document.getElementById('best-val');
+const boardEl = document.getElementById('board');
+const tileLayer = document.getElementById('tile-layer');
+const winOverlay  = document.getElementById('win-overlay');
+const loseOverlay = document.getElementById('lose-overlay');
+
+bestEl.textContent = best;
+
+// ── BOARD SETUP ────────────────────────────────────────
+function buildBoard() {
+  boardEl.innerHTML = '';
+  for (let i = 0; i < SIZE * SIZE; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    boardEl.appendChild(cell);
+  }
+}
+
+function newGame() {
+  grid = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
+  score = 0;
+  won = false;
+  keepGoing = false;
+  scoreEl.textContent = 0;
+  winOverlay.classList.remove('show');
+  loseOverlay.classList.remove('show');
+  addRandom();
+  addRandom();
+  renderTiles(true);
+}
+
+function keepPlaying() {
+  keepGoing = true;
+  winOverlay.classList.remove('show');
+}
+
+// ── TILE MANAGEMENT ────────────────────────────────────
+function addRandom() {
+  const empty = [];
+  for (let r = 0; r < SIZE; r++)
+    for (let c = 0; c < SIZE; c++)
+      if (grid[r][c] === 0) empty.push([r, c]);
+  if (!empty.length) return;
+  const [r, c] = empty[Math.floor(Math.random() * empty.length)];
+  grid[r][c] = Math.random() < 0.85 ? 2 : 4;
+  return [r, c];
+}
+
+// ── RENDER ─────────────────────────────────────────────
+let tileEls = {}; // key: "r-c" → DOM element
+
+function getCellSize() {
+  const cell = boardEl.querySelector('.cell');
+  if (!cell) return 80;
+  return cell.offsetWidth;
+}
+
+function getCellPos(r, c) {
+  const gap = 8;
+  const size = getCellSize();
+  return { left: c * (size + gap), top: r * (size + gap) };
+}
+
+function renderTiles(isNew = false, newPos = null, mergePositions = []) {
+  // Remove tiles not in grid
+  const validKeys = new Set();
+  for (let r = 0; r < SIZE; r++)
+    for (let c = 0; c < SIZE; c++)
+      if (grid[r][c]) validKeys.add(`${r}-${c}`);
+
+  // Remove old
+  for (const key of Object.keys(tileEls)) {
+    if (!validKeys.has(key)) {
+      tileEls[key].remove();
+      delete tileEls[key];
+    }
+  }
+
+  const size = getCellSize();
+  const fontSize = size > 70 ? (v => v >= 1000 ? '1.1rem' : v >= 100 ? '1.3rem' : '1.6rem') :
+                               (v => v >= 1000 ? '0.8rem' : v >= 100 ? '0.95rem' : '1.1rem');
+
+  for (let r = 0; r < SIZE; r++) {
+    for (let c = 0; c < SIZE; c++) {
+      const v = grid[r][c];
+      if (!v) continue;
+      const key = `${r}-${c}`;
+      const { left, top } = getCellPos(r, c);
+      const col = TILE_COLORS[v] || { bg: '#ffd700', fg: '#05090f', glow: 'rgba(255,215,0,0.9)' };
+
+      if (tileEls[key]) {
+        // Update existing
+        const el = tileEls[key];
+        el.style.left = left + 'px';
+        el.style.top  = top + 'px';
+        el.style.width = size + 'px';
+        el.style.height = size + 'px';
+        el.style.background = col.bg;
+        el.style.color = col.fg;
+        el.style.fontSize = fontSize(v);
+        el.textContent = LABELS[v] || v;
+        if (col.glow !== 'none') el.style.boxShadow = `0 0 16px ${col.glow}, inset 0 0 8px rgba(255,255,255,0.08)`;
+        else el.style.boxShadow = 'none';
+
+        if (mergePositions.some(([mr, mc]) => mr === r && mc === c)) {
+          el.classList.remove('merge');
+          void el.offsetWidth;
+          el.classList.add('merge');
+        }
+      } else {
+        // Create new tile
+        const el = document.createElement('div');
+        el.className = 'tile' + (isNew || (newPos && newPos[0] === r && newPos[1] === c) ? ' new' : '');
+        el.style.cssText = `
+          left:${left}px; top:${top}px;
+          width:${size}px; height:${size}px;
+          background:${col.bg}; color:${col.fg};
+          font-size:${fontSize(v)};
+          ${col.glow !== 'none' ? `box-shadow:0 0 16px ${col.glow}, inset 0 0 8px rgba(255,255,255,0.08);` : ''}
+          border:1px solid rgba(255,255,255,0.08);
+        `;
+        el.textContent = LABELS[v] || v;
+        tileLayer.appendChild(el);
+        tileEls[key] = el;
+      }
+    }
+  }
+}
+
+// ── MOVE LOGIC ─────────────────────────────────────────
+function compress(row) {
+  const vals = row.filter(v => v !== 0);
+  const merged = [];
+  let gained = 0;
+  const mergedIdxs = [];
+  let i = 0;
+  while (i < vals.length) {
+    if (i + 1 < vals.length && vals[i] === vals[i + 1]) {
+      const v = vals[i] * 2;
+      merged.push(v);
+      mergedIdxs.push(merged.length - 1);
+      gained += v;
+      i += 2;
+    } else {
+      merged.push(vals[i]);
+      i++;
+    }
+  }
+  while (merged.length < SIZE) merged.push(0);
+  return { row: merged, gained, mergedIdxs };
+}
+
+function move(dir) {
+  let moved = false;
+  let totalGained = 0;
+  const mergePositions = [];
+
+  const oldGrid = grid.map(r => [...r]);
+
+  if (dir === 'left') {
+    for (let r = 0; r < SIZE; r++) {
+      const { row, gained, mergedIdxs } = compress(grid[r]);
+      mergedIdxs.forEach(c => mergePositions.push([r, c]));
+      grid[r] = row;
+      totalGained += gained;
+    }
+  } else if (dir === 'right') {
+    for (let r = 0; r < SIZE; r++) {
+      const { row, gained, mergedIdxs } = compress([...grid[r]].reverse());
+      mergedIdxs.forEach(c => mergePositions.push([r, SIZE - 1 - c]));
+      grid[r] = row.reverse();
+      totalGained += gained;
+    }
+  } else if (dir === 'up') {
+    for (let c = 0; c < SIZE; c++) {
+      const col = grid.map(r => r[c]);
+      const { row, gained, mergedIdxs } = compress(col);
+      mergedIdxs.forEach(r => mergePositions.push([r, c]));
+      for (let r = 0; r < SIZE; r++) grid[r][c] = row[r];
+      totalGained += gained;
+    }
+  } else if (dir === 'down') {
+    for (let c = 0; c < SIZE; c++) {
+      const col = grid.map(r => r[c]).reverse();
+      const { row, gained, mergedIdxs } = compress(col);
+      mergedIdxs.forEach(r => mergePositions.push([SIZE - 1 - r, c]));
+      const rev = row.reverse();
+      for (let r = 0; r < SIZE; r++) grid[r][c] = rev[r];
+      totalGained += gained;
+    }
+  }
+
+  // Check if anything changed
+  for (let r = 0; r < SIZE; r++)
+    for (let c = 0; c < SIZE; c++)
+      if (grid[r][c] !== oldGrid[r][c]) moved = true;
+
+  if (!moved) return;
+
+  // Update score
+  if (totalGained > 0) {
+    score += totalGained;
+    scoreEl.textContent = score;
+    if (score > best) {
+      best = score;
+      bestEl.textContent = best;
+      localStorage.setItem('csk-2048-best', best);
+    }
+    // Score pop
+    showScorePop('+' + totalGained);
+  }
+
+  // Add new tile
+  const newPos = addRandom();
+
+  // Render
+  renderTiles(false, newPos, mergePositions);
+
+  // Check win
+  if (!won && !keepGoing) {
+    for (let r = 0; r < SIZE; r++)
+      for (let c = 0; c < SIZE; c++)
+        if (grid[r][c] === 2048) {
+          won = true;
+          setTimeout(() => {
+            document.getElementById('win-score').textContent = 'Score: ' + score;
+            winOverlay.classList.add('show');
+          }, 300);
+          return;
+        }
+  }
+
+  // Check loss
+  if (!canMove()) {
+    setTimeout(() => {
+      document.getElementById('lose-score').textContent = 'Score: ' + score;
+      loseOverlay.classList.add('show');
+    }, 300);
+  }
+}
+
+function canMove() {
+  for (let r = 0; r < SIZE; r++)
+    for (let c = 0; c < SIZE; c++) {
+      if (grid[r][c] === 0) return true;
+      if (c < SIZE - 1 && grid[r][c] === grid[r][c + 1]) return true;
+      if (r < SIZE - 1 && grid[r][c] === grid[r + 1][c]) return true;
+    }
+  return false;
+}
+
+// ── SCORE POP ──────────────────────────────────────────
+function showScorePop(text) {
+  const pop = document.createElement('div');
+  pop.className = 'score-pop';
+  pop.textContent = text;
+  pop.style.left = (Math.random() * 60 + 20) + '%';
+  pop.style.top  = (Math.random() * 40 + 30) + '%';
+  document.getElementById('board-wrap').appendChild(pop);
+  setTimeout(() => pop.remove(), 800);
+}
+
+// ── INPUT: KEYBOARD ────────────────────────────────────
+document.addEventListener('keydown', e => {
+  const map = { ArrowLeft:'left', ArrowRight:'right', ArrowUp:'up', ArrowDown:'down' };
+  if (map[e.key]) { e.preventDefault(); move(map[e.key]); }
+});
+
+// ── INPUT: SWIPE (pointer events — works on touch AND mouse, reliable in iframes) ──
+let pointerStart = null;
+
+document.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  pointerStart = { x: e.clientX, y: e.clientY };
+});
+
+document.addEventListener('pointerup', e => {
+  e.preventDefault();
+  if (!pointerStart) return;
+  const dx = e.clientX - pointerStart.x;
+  const dy = e.clientY - pointerStart.y;
+  pointerStart = null;
+  if (Math.max(Math.abs(dx), Math.abs(dy)) < 15) return;
+  if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? 'right' : 'left');
+  else move(dy > 0 ? 'down' : 'up');
+});
+
+document.addEventListener('pointercancel', () => { pointerStart = null; });
+
+// ── RESIZE ─────────────────────────────────────────────
+function onResize() {
+  renderTiles(false);
+}
+window.addEventListener('resize', onResize);
+
+// ── INIT ───────────────────────────────────────────────
+buildBoard();
+newGame();
+</script>
+</body>
+</html>
